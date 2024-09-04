@@ -157,5 +157,13 @@ def main():
                         st.write("### Generated Literature Survey")
                         st.write(survey)
 
+    # Adding credits with hyperlinks
+    st.markdown("""
+        <br><br>
+        <footer style="background-color: #f1f1f1; padding: 10px; text-align: center;">
+            <p>Made by <a href="https://www.linkedin.com/in/vansh-jatana/" target="_blank" style="text-decoration: none; color: #007bff;">Vansh Jatana</a> and <a href="https://www.linkedin.com/in/raghavventure/" target="_blank" style="text-decoration: none; color: #007bff;">Raghav Gupta</a></p>
+        </footer>
+        """, unsafe_allow_html=True)
+
 if __name__ == "__main__":
     main()
