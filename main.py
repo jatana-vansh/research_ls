@@ -106,39 +106,34 @@ def extract_text_from_pdf(filename):
 def sanitize_filename(filename):
     return filename.replace(' ', '_').replace(':', '').replace('/', '')
 
-def generate_literature_survey(text):
+def generate_literature_survey(text, user_prompt):
     logging.info("Starting literature survey generation")
     api_key = "AIzaSyC4W72QzE7TUzHfD2qjb6Nma6kZmyBHGQg"
     if api_key:
         genai.configure(api_key=api_key)
 
         model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = """
-            Create a detailed literature survey based on the following text. The survey should synthesize the main findings and insights from the provided research papers in a coherent and formal academic style.
-
-            **Instructions:**
-            - Generate a comprehensive literature survey that integrates the key points from the provided text.
-            - Write in a formal academic tone with a clear and logical flow.
-            - Format all in-text citations in APA style and ensure they correspond accurately to the references provided.
-            - Include a reference list formatted in APA style, with correct citations and hyperlinks to the referenced papers where applicable.
-            - Ensure the final output is directly suitable for inclusion in an academic paper with no additional editing required.
+        prompt = f"""
+            {user_prompt}
 
             **Text:**
 
-
+            {text}
             """
-        full_prompt = prompt + '\n\n\n' + text
-        res = model.generate_content(full_prompt)
+        res = model.generate_content(prompt)
         logging.info("Literature survey generated successfully")
         return res.text
     logging.error("API key not configured")
     return ""
+
 
 def main():
     st.title("Literature Survey Generator")
 
     title = st.text_input("Enter the Title of the Paper:")
     about = st.text_area("Enter the Description About the Paper:")
+    user_prompt = st.text_area("Enter Your Prompt for the Literature Survey:")
+
     if st.button("Generate Literature Survey"):
         
         with st.spinner("Generating query..."):
@@ -153,13 +148,12 @@ def main():
                     st.error(error)
                 else:
                     with st.spinner("Generating literature survey..."):
-                        survey = generate_literature_survey(text)
+                        survey = generate_literature_survey(text, user_prompt)
                         st.write("### Generated Literature Survey")
                         st.write(survey)
 
     # Adding credits with hyperlinks
-    st.markdown("""
-        <br><br>
+    st.markdown("""<br><br>
         <footer style="background-color: #f1f1f1; padding: 10px; text-align: center;">
             <p>Made by <a href="https://www.linkedin.com/in/vansh-jatana/" target="_blank" style="text-decoration: none; color: #007bff;">Vansh Jatana</a> and <a href="https://www.linkedin.com/in/raghavventure/" target="_blank" style="text-decoration: none; color: #007bff;">Raghav Gupta</a></p>
         </footer>
