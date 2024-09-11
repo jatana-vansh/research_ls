@@ -16,20 +16,35 @@ def generate_query(title, about):
         genai.configure(api_key=api_key)
 
         model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = f"""
-            Generate a concise search query for arXiv based on the following information:
+        validation_prompt = f"""
+            Analyze the following title and description for a research paper:
             Title: {title}
             About the Paper: {about}
-            The query should be clear, relevant, and suitable for retrieving academic papers related to the given title and description.
+
+            Determine if this information is suitable for a genuine research paper. 
+            If it appears to be random text, irrelevant, or not research-related, respond with 'INVALID:' followed by a brief explanation.
+            If it seems like a valid research topic, respond with 'VALID:' followed by a suggested search query.
+            
+            Your response should be in the format:
+            VALID: [Suggested search query]
+            or
+            INVALID: [Brief explanation]
         """
-        res = model.generate_content(prompt)
-        logging.info("Query generated successfully")
-        return sanitize_query(res.text.strip())
+        res = model.generate_content(validation_prompt)
+        response_text = res.text.strip()
+        print(response_text)
+        if response_text.startswith('VALID:'):
+            logging.info("Query generated successfully")
+            return sanitize_query(response_text)
+        else:
+            print(response_text)
+            logging.info("Invalid input detected")
+            raise ValueError("Please provide a more relevant title and description for the literature survey.")
     logging.error("API key not configured")
-    return ""
+    return "INVALID: API configuration error"
 
 def sanitize_query(query):
-    sanitized_query = query
+    sanitized_query = query.replace('VALID:', '').strip()
     sanitized_query = sanitized_query.replace('(', '').replace(')', '')  # Remove parentheses
     sanitized_query = sanitized_query.replace('"', '').replace("'", '')  # Remove single and double quotes
     sanitized_query = ' '.join(sanitized_query.split())  # Remove extra spaces
@@ -111,7 +126,8 @@ def generate_literature_survey(text):
     api_key = "AIzaSyC4W72QzE7TUzHfD2qjb6Nma6kZmyBHGQg"  # Replace with your actual API key
     if api_key:
         genai.configure(api_key=api_key)
-
+        if len(text.split()) < 100:  # Adjust this threshold as needed
+            return "The provided text is too short or not relevant for generating a literature survey. Please provide more substantial content related to research papers."
         model = genai.GenerativeModel('gemini-1.5-flash')
         prompt = f"""
             You are an expert research scientist with years of experience in analyzing and writing literature reviews for research papers. Your task is to apply your expertise to craft a comprehensive literature review for the paper titled [Title]. The review will focus on [Description]. You will be given the necessary research papers and materials for you to look over.
@@ -126,6 +142,8 @@ def generate_literature_survey(text):
             **Text:**
 
             {text}
+
+            Note - Only refer to the given text and not any other knowledge, open data, or external references.
         """
         res = model.generate_content(prompt)
         logging.info("Literature survey generated successfully")
@@ -182,21 +200,38 @@ def main():
         about = st.text_area("Enter the Description About the Paper:")
 
         if st.button("Generate Literature Survey"):
-            with st.spinner("Generating query..."):
-                query = generate_query(title, about)
-            if not query:
-                st.error("Failed to generate a query.")
+            if not title and not about:
+                st.warning("Please provide a detailed title and description. Avoid very short or random inputs.")
                 return
+            try:
+                with st.spinner("Generating query..."):
+                    query = generate_query(title, about)
+                
+                if not query:
+                    st.error("Failed to generate a query. Please try again.")
+                    return
 
-            with st.spinner("Fetching and processing papers..."):
-                text, error = search_and_process_arxiv(query, max_results=5, sort_by="relevance")
-            if error:
-                st.error(error)
-            else:
-                with st.spinner("Generating literature survey..."):
-                    survey = generate_literature_survey(text)  # Correctly use extracted text
-                st.write("### Generated Literature Survey")
-                st.write(survey)
+                with st.spinner("Fetching and processing papers..."):
+                    text, error = search_and_process_arxiv(query, max_results=5, sort_by="relevance")
+                
+                if error:
+                    st.error(error)
+                else:
+                    if not text.strip():
+                        st.warning("No relevant papers found. Please provide a more detailed title and description.")
+                        return
+
+                    with st.spinner("Generating literature survey..."):
+                        survey = generate_literature_survey(text)
+                    st.write("### Generated Literature Survey")
+                    st.write(survey)
+            
+            except ValueError:
+                st.warning("The provided title and description were not sufficient for generating a query. Please try again with more relevant details.")
+            except RuntimeError:
+                st.error("An error occurred with the API configuration. Please contact support.")
+            except Exception as e:
+                st.error(f"An unexpected error occurred: {e}")
 
     elif option == "By Uploading Paper(s)":
         uploaded_files = st.file_uploader("Upload one or more PDF files", type="pdf", accept_multiple_files=True)
@@ -209,10 +244,14 @@ def main():
                     for page in pdf.pages:
                         paper_text += page.extract_text() or ""
                     combined_text += f"Paper {idx + 1}:\n{paper_text}\n\n"
+            print(combined_text)
+            if not combined_text.strip():
+                st.warning("The uploaded files do not contain readable text. Please upload valid PDF files.")
+                return
 
             if st.button("Generate Literature Survey"):
                 with st.spinner("Generating literature survey..."):
-                    survey = generate_literature_survey(combined_text)  # Use extracted text from uploaded papers
+                    survey = generate_literature_survey(combined_text)
                 st.write("### Generated Literature Survey")
                 st.write(survey)
 
@@ -227,3 +266,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
