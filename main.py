@@ -142,7 +142,6 @@ def generate_literature_survey(text):
             **Text:**
 
             {text}
-
             Note - Only refer to the given text and not any other knowledge, open data, or external references.
         """
         res = model.generate_content(prompt)
