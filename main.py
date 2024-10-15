@@ -121,30 +121,18 @@ def extract_text_from_pdf(filename):
 def sanitize_filename(filename):
     return filename.replace(' ', '_').replace(':', '').replace('/', '')
 
-def generate_literature_survey(text):
+def generate_literature_survey(text, user_prompt):
     logging.info("Starting literature survey generation")
-    api_key = "AIzaSyC4W72QzE7TUzHfD2qjb6Nma6kZmyBHGQg"  # Replace with your actual API key
+    api_key = "AIzaSyC4W72QzE7TUzHfD2qjb6Nma6kZmyBHGQg"
     if api_key:
         genai.configure(api_key=api_key)
-        if len(text.split()) < 100:  # Adjust this threshold as needed
-            return "The provided text is too short or not relevant for generating a literature survey. Please provide more substantial content related to research papers."
+
         model = genai.GenerativeModel('gemini-1.5-flash')
         prompt = f"""
-            You are an expert research scientist with years of experience in analyzing and writing literature reviews for research papers. Your task is to apply your expertise to craft a comprehensive literature review for the paper titled [Title]. The review will focus on [Description]. You will be given the necessary research papers and materials for you to look over.
-            Follow the following rules strictly:
-            -Structure the content clearly, precisely and in long paragraphs without breaking into points
-            -Using APA citation style.
-            -Analyze and discuss the methods used in the studies and the results obtained.
-            -Ensure that your writing flows smoothly between paragraphs
-            -Keep the review insightful, engaging, and informative while maintaining a formal academic tone.
-            - At the end provide reference list
-            
+            {user_prompt}
             **Text:**
-
             {text}
-            
-            Note - Only refer to the given text and not any other knowledge, open data, or external references.
-        """
+            """
         res = model.generate_content(prompt)
         logging.info("Literature survey generated successfully")
         return res.text
@@ -152,118 +140,35 @@ def generate_literature_survey(text):
     return ""
 
 def main():
-    st.markdown("""
-        <style>
-            body {
-                font-family: 'Arial', sans-serif;
-                background-color: #f4f4f4;
-            }
-            .main-content {
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 2rem;
-                background-color: white;
-                border-radius: 8px;
-                box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
-            }
-            .stButton button {
-                background-color: #007bff !important;
-                color: white !important;
-                border: none !important;
-                border-radius: 4px !important;
-                padding: 0.5rem 1rem !important;
-            }
-            .stButton button:hover {
-                background-color: #0056b3 !important;
-            }
-            footer {
-                margin-top: 2rem;
-                background-color: #f1f1f1;
-                padding: 10px;
-                text-align: center;
-            }
-            footer a {
-                text-decoration: none;
-                color: #007bff;
-            }
-        </style>
-    """, unsafe_allow_html=True)
+    st.title("Literature Survey Generator")
 
-    st.markdown('<div class="main-content">', unsafe_allow_html=True)
+    title = st.text_input("Enter the Title of the Paper:")
+    about = st.text_area("Enter the Description About the Paper:")
+    user_prompt = st.text_area("Enter Your Prompt for the Literature Survey:")
+    if st.button("Generate Literature Survey"):
 
-    st.title("Literature Survey Generator 📚")
-
-    option = st.radio("Choose an option to generate a literature survey:", ("By Title and Description", "By Uploading Paper(s)"))
-
-    if option == "By Title and Description":
-        title = st.text_input("Enter the Title of the Paper:")
-        about = st.text_area("Enter the Description About the Paper:")
-
-        if st.button("Generate Literature Survey"):
-            if not title and not about:
-                st.warning("Please provide a detailed title and description. Avoid very short or random inputs.")
+        with st.spinner("Generating query..."):
+            query = generate_query(title, about)
+            if not query:
+                st.error("Failed to generate a query.")
                 return
-            try:
-                with st.spinner("Generating query..."):
-                    query = generate_query(title, about)
-                
-                if not query:
-                    st.error("Failed to generate a query. Please try again.")
-                    return
 
-                with st.spinner("Fetching and processing papers..."):
-                    text, error = search_and_process_arxiv(query, max_results=5, sort_by="relevance")
-                
+            with st.spinner("Fetching and processing papers..."):
+                text, error = search_and_process_arxiv(query, max_results=5, sort_by="relevance")
                 if error:
                     st.error(error)
                 else:
-                    if not text.strip():
-                        st.warning("No relevant papers found. Please provide a more detailed title and description.")
-                        return
-
                     with st.spinner("Generating literature survey..."):
-                        survey = generate_literature_survey(text)
-                    st.write("### Generated Literature Survey")
-                    st.write(survey)
-            
-            except ValueError:
-                st.warning("The provided title and description were not sufficient for generating a query. Please try again with more relevant details.")
-            except RuntimeError:
-                st.error("An error occurred with the API configuration. Please contact support.")
-            except Exception as e:
-                st.error(f"An unexpected error occurred: {e}")
-
-    elif option == "By Uploading Paper(s)":
-        uploaded_files = st.file_uploader("Upload one or more PDF files", type="pdf", accept_multiple_files=True)
-
-        if uploaded_files:
-            combined_text = ""
-            for idx, uploaded_file in enumerate(uploaded_files):
-                with pdfplumber.open(uploaded_file) as pdf:
-                    paper_text = ""
-                    for page in pdf.pages:
-                        paper_text += page.extract_text() or ""
-                    combined_text += f"Paper {idx + 1}:\n{paper_text}\n\n"
-            print(combined_text)
-            if not combined_text.strip():
-                st.warning("The uploaded files do not contain readable text. Please upload valid PDF files.")
-                return
-
-            if st.button("Generate Literature Survey"):
-                with st.spinner("Generating literature survey..."):
-                    survey = generate_literature_survey(combined_text)
-                st.write("### Generated Literature Survey")
-                st.write(survey)
-
-    st.markdown("</div>", unsafe_allow_html=True)
+                        survey = generate_literature_survey(text, user_prompt)
+                        st.write("### Generated Literature Survey")
+                        st.write(survey)
 
     # Adding credits with hyperlinks
-    st.markdown("""
-        <footer>
-            <p>Made by <a href="https://www.linkedin.com/in/vansh-jatana/" target="_blank">Vansh Jatana</a> and <a href="https://www.linkedin.com/in/raghavventure/" target="_blank">Raghav Gupta</a></p>
+    st.markdown("""<br><br>
+        <footer style="background-color: #f1f1f1; padding: 10px; text-align: center;">
+            <p>Made by <a href="https://www.linkedin.com/in/vansh-jatana/" target="_blank" style="text-decoration: none; color: #007bff;">Vansh Jatana</a> and <a href="https://www.linkedin.com/in/raghavventure/" target="_blank" style="text-decoration: none; color: #007bff;">Raghav Gupta</a></p>
         </footer>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
-
